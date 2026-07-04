@@ -1,0 +1,41 @@
+name: postscan
+description: PostScan - AI-Powered Address Recognition & Delivery Routing System for India Post
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  
+  # State Management
+  flutter_riverpod: ^2.5.1
+  
+  # Networking
+  dio: ^5.4.1
+  
+  # Geospatial & Maps
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.0
+  geolocator: ^11.0.0
+  url_launcher: ^6.3.0
+  
+  # Scanner & Utilities
+  image_picker: ^1.0.7
+  shared_preferences: ^2.2.2
+  google_fonts: ^6.1.0
+  intl: ^0.20.2
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/locales/
