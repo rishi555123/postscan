@@ -1,134 +1,98 @@
-# 📮 PostScan – AI Powered Smart Postal Management System
+# PostScan
 
-> Transforming India's postal workflow using AI-powered OCR, automated beat assignment, route optimization, and real-time delivery tracking.
-
-![Flutter](https://img.shields.io/badge/Flutter-3.x-blue?logo=flutter)
-![Node.js](https://img.shields.io/badge/Node.js-Express-green?logo=node.js)
-![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-success?logo=mongodb)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+AI-Powered Smart Postal Management System for Intelligent Mail Processing and Delivery Optimization.
 
 ---
 
-# 🚀 Overview
+## Overview
 
-PostScan is an intelligent postal management platform designed for India Post.
+PostScan is an intelligent postal management platform developed to modernize the traditional workflow of postal operations. The system automates address extraction, beat assignment, route optimization, and delivery tracking using Artificial Intelligence and geospatial services.
 
-Instead of manually reading addresses, assigning beats, and planning delivery routes, PostScan automates the complete workflow using AI.
-
-The system enables postal staff to:
-
-- 📸 Scan postal covers
-- 🤖 Extract addresses using AI OCR
-- 📍 Convert addresses into GPS coordinates
-- 🧭 Automatically assign delivery beats
-- 🗺️ Optimize delivery routes
-- 🌧️ Fetch weather alerts
-- 📦 Track every letter until delivery
+The platform assists postal staff by reducing manual effort while improving delivery efficiency and operational transparency.
 
 ---
 
-# ✨ Features
+## Key Features
 
-## 🧠 AI OCR
+### AI-Based OCR
 
-- Gemini Vision OCR
-- Automatic recipient extraction
-- Address parsing
-- Confidence scoring
-- Manual correction interface
+- Automatic address extraction from postal covers
+- Recipient name detection
+- Structured address parsing
+- OCR confidence scoring
+- Manual verification and correction
 
----
+### Batch Processing
 
-## 📮 Beat Assignment
+- Multiple image upload
+- Parallel OCR processing
+- Batch status monitoring
+- Review pipeline
 
-Automatically assigns letters to the nearest delivery beat based on location.
+### Beat Assignment
 
-- Beat Mapping
-- Beat Color Coding
-- Postman Allocation
+- Automatic delivery beat allocation
+- Geographic mapping
+- Postman assignment
+- Beat-wise segregation
 
----
+### Route Optimization
 
-## 🗺️ Route Optimization
+- Optimized delivery sequence
+- Shortest-path route planning
+- Interactive route visualization
+- Distance calculation
 
-Uses shortest-path algorithms to reduce travel distance.
+### Weather Intelligence
 
-Features:
+- Real-time weather information
+- Rain alerts
+- Delivery warnings
+- Cached weather support
 
-- Google Maps Integration
-- Optimized Delivery Order
-- Distance Calculation
-- Route Visualization
+### Delivery Tracking
 
----
+Letter lifecycle management:
 
-## 📦 Batch Processing
-
-Upload multiple postal covers simultaneously.
-
-- Multiple Image Upload
-- Queue Processing
-- OCR Pipeline
-- Batch Status Monitoring
-
----
-
-## 🌦️ Weather Integration
-
-Real-time weather information for delivery planning.
-
-- Rain Alerts
-- Temperature
-- Weather Warnings
-- Cached Weather Support
-
----
-
-## 📍 Delivery Tracking
-
-Track every letter through its lifecycle.
-
-```
+```text
 Scanned
     ↓
-OCR Verified
+OCR Verification
     ↓
-Beat Assigned
+Beat Assignment
     ↓
-Out For Delivery
+Out for Delivery
     ↓
 Delivered
 ```
 
----
+### User Roles
 
-## 👨‍💼 Multi Role System
+#### Office Staff
 
-### Office Staff
+- Batch scanning
+- OCR verification
+- Beat allocation
+- Dashboard monitoring
 
-- Batch Scan
-- OCR Review
-- Beat Assignment
-- Analytics Dashboard
+#### Postman
 
-### Postman
+- Assigned deliveries
+- Route navigation
+- Delivery status updates
+- Live tracking
 
-- Assigned Letters
-- Route Navigation
-- Delivery Updates
-- Status Tracking
+#### Administrator
 
-### Admin
-
-- User Management
-- Analytics
-- Performance Reports
+- User management
+- Performance analytics
+- System monitoring
 
 ---
 
-# 🏗️ System Architecture
+# System Architecture
 
-```
+```text
 Flutter Application
 │
 ├── Office Dashboard
@@ -150,27 +114,25 @@ Node.js + Express API
         ▼
 MongoDB Atlas
         │
-        ├── Users
-        ├── Letters
-        ├── Beats
-        └── Weather Cache
+ ├── Users
+ ├── Letters
+ ├── Beats
+ └── Weather Cache
 ```
 
 ---
 
-# 🛠️ Tech Stack
+## Technology Stack
 
-## Frontend
+### Frontend
 
 - Flutter
 - Dart
-- flutter_map
 - Dio
+- flutter_map
 - File Picker
 
----
-
-## Backend
+### Backend
 
 - Node.js
 - Express.js
@@ -178,37 +140,29 @@ MongoDB Atlas
 - Multer
 - Mongoose
 
----
-
-## Database
+### Database
 
 - MongoDB Atlas
 
----
-
-## AI Services
+### Artificial Intelligence
 
 - Google Gemini Vision API
 
----
-
-## Maps & Location
+### Maps & Geolocation
 
 - Google Geocoding API
 - OpenStreetMap
 - flutter_map
 
----
-
-## Weather
+### Weather Services
 
 - OpenWeather API
 
 ---
 
-# 📂 Project Structure
+## Project Structure
 
-```
+```text
 PostScan
 │
 ├── backend
@@ -221,6 +175,7 @@ PostScan
 │   └── server.js
 │
 ├── flutter_app
+│   ├── android
 │   ├── lib
 │   │   ├── models
 │   │   ├── screens
@@ -229,26 +184,24 @@ PostScan
 │   │   ├── widgets
 │   │   └── main.dart
 │   │
-│   └── android
+│   └── pubspec.yaml
 │
 └── README.md
 ```
 
 ---
 
-# ⚙️ Installation
+## Installation
 
-## Clone Repository
+### Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/PostScan.git
+git clone https://github.com/<username>/PostScan.git
 
 cd PostScan
 ```
 
----
-
-## Backend
+### Backend
 
 ```bash
 cd backend
@@ -258,9 +211,7 @@ npm install
 npm run dev
 ```
 
----
-
-## Flutter
+### Flutter Application
 
 ```bash
 cd flutter_app
@@ -272,9 +223,9 @@ flutter run
 
 ---
 
-# 🔑 Environment Variables
+## Environment Variables
 
-Create a `.env` file inside the backend.
+Create a `.env` file inside the `backend` directory.
 
 ```env
 PORT=5000
@@ -283,79 +234,84 @@ MONGO_URI=YOUR_MONGODB_URI
 
 JWT_SECRET=YOUR_SECRET
 
-GEMINI_API_KEY=YOUR_GEMINI_KEY
+GEMINI_API_KEY=YOUR_GEMINI_API_KEY
 
-GOOGLE_GEOCODING_API_KEY=YOUR_GOOGLE_KEY
+GOOGLE_GEOCODING_API_KEY=YOUR_GOOGLE_GEOCODING_API_KEY
 
-OPENWEATHER_API_KEY=YOUR_OPENWEATHER_KEY
+OPENWEATHER_API_KEY=YOUR_OPENWEATHER_API_KEY
 ```
 
 ---
 
-# 📊 Workflow
+## Processing Workflow
 
-```
-Scan Postal Cover
-        │
-        ▼
-Gemini OCR
-        │
-        ▼
-Extract Address
-        │
-        ▼
-Google Geocoding
-        │
-        ▼
+```text
+Postal Cover
+      │
+      ▼
+Image Upload
+      │
+      ▼
+AI OCR (Gemini)
+      │
+      ▼
+Address Extraction
+      │
+      ▼
+Geocoding
+      │
+      ▼
 Beat Assignment
-        │
-        ▼
+      │
+      ▼
 Weather Analysis
-        │
-        ▼
-Save to MongoDB
-        │
-        ▼
+      │
+      ▼
+Database Storage
+      │
+      ▼
 Route Optimization
-        │
-        ▼
-Delivered
+      │
+      ▼
+Delivery Tracking
 ```
 
 ---
 
-# 🎯 Future Scope
+## Future Enhancements
 
-- Barcode Detection
-- QR Code Support
-- Offline OCR
-- Delivery Analytics
-- Predictive Delivery Time
-- AI Address Correction
-- Mobile Notifications
-- India Post API Integration
-
----
-
-# 👨‍💻 Team
-
-Developed for Hackathon.
-
-Team Name:
-**PostScan**
+- Offline OCR support
+- Barcode and QR code recognition
+- AI-based address correction
+- Delivery time prediction
+- Push notifications
+- Postal analytics dashboard
+- India Post service integration
 
 ---
 
-# 📄 License
+## Team
 
-MIT License
+**Project:** PostScan
+
+Developed as a Hackathon project focused on improving postal automation through Artificial Intelligence, computer vision, and geospatial technologies.
 
 ---
 
-# ⭐ Support
+## License
 
-If you found this project useful,
+This project is licensed under the MIT License.
 
-⭐ Star this repository.
+---
 
-Contributions and suggestions are always welcome.
+## Acknowledgements
+
+This project utilizes the following technologies and services:
+
+- Flutter
+- Node.js
+- MongoDB Atlas
+- Google Gemini API
+- Google Geocoding API
+- OpenWeather API
+- OpenStreetMap
