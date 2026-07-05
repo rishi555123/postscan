@@ -1,4 +1,5 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { geocodeAddress } = require("./geocoding");
 const fs = require('fs');
 const path = require('path');
 
@@ -124,77 +125,104 @@ const fileToGenerativePart = (filePath) => {
  * Uses official Gemini SDK in active mode, otherwise triggers mock fallbacks.
  */
 const parseAddressFromImage = async (imagePath) => {
-  // If the key isn't provided or initialized, fall back to default mock array
   if (!genAI) {
-    console.log('Gemini API Key missing in environment setup. Utilizing local fallback address parser.');
+    console.log("Gemini API key missing.");
     return getFallbackAddress();
   }
 
   try {
-    // 1. Target the highly optimized multimodal text/image model
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      // 🔥 FIX: Forces the model to respond strictly with valid raw JSON at the server architecture layer
-      generationConfig: { responseMimeType: 'application/json' }
-    });
+  model: "gemini-2.5-flash",
+  generationConfig: {
+    responseMimeType: "application/json",
+  },
+});
 
-    // 2. Load the dynamic mime part payload representation
     const imagePart = fileToGenerativePart(imagePath);
 
-    // 3. Clear, unambiguous system guidelines for address decomposition extraction
-    const prompt = `Analyze this shipping label image.
-    1. Perform printed character OCR to extract all raw text.
-    2. Structure the parsed address elements, expanding common abbreviations (e.g. "Hyd" to "Hyderabad", "Ngr" to "Nagar", "AP" to "Andhra Pradesh") and correcting spellings.
-    3. Classify into specific fields matching this exact JSON format layout target precisely.
+    const prompt = `
+You are an OCR engine for India Post.
 
-    You MUST respond with a valid JSON object matching this schema blueprint structure:
-    {
-      "recipientName": "Recipient Full Name",
-      "address": {
-        "houseNumber": "House/Plot/Door Number",
-        "apartment": "Apartment or Building name",
-        "street": "Street name/road details",
-        "locality": "Area or colony name",
-        "city": "City/Town",
-        "district": "Postal district name",
-        "state": "State name",
-        "pincode": "6-digit postal pincode",
-        "fullAddress": "Complete normalized and expanded address"
-      },
-      "coordinates": {
-        "lat": 17.4448,
-        "lng": 78.4728
-      },
-      "ocrText": "Raw extracted text lines from the image character structures",
-      "ocrConfidence": 85.0,
-      "lowConfidence": false
-    }`;
+Read the postal cover carefully.
 
-    console.log('Sending multi-modal request to Gemini Cloud OCR Processing Engine...');
-    const result = await model.generateContent([prompt, imagePart]);
-    const responseText = result.response.text();
+Extract ONLY the recipient details.
 
-    if (!responseText) {
-      throw new Error('Gemini API returned an empty text payload response stream.');
+Return ONLY valid JSON.
+
+{
+  "recipientName": "",
+  "address": {
+    "houseNumber": "",
+    "apartment": "",
+    "street": "",
+    "locality": "",
+    "city": "",
+    "district": "",
+    "state": "",
+    "pincode": "",
+    "fullAddress": ""
+  },
+  "ocrText": ""
+}
+
+Do not return markdown.
+
+Do not return explanation.
+
+Do not use \`\`\`json.
+`;
+
+    console.log("Sending image to Gemini...");
+
+    const result = await model.generateContent([
+      prompt,
+      imagePart,
+    ]);
+
+    const response = result.response.text();
+
+    console.log("Gemini Response:");
+    console.log(response);
+
+    const parsedData = JSON.parse(response);
+
+    if (
+      !parsedData.recipientName ||
+      !parsedData.address
+    ) {
+      throw new Error("Invalid OCR response.");
     }
 
-    // 4. Safely parse out clean text directly without cleaning markdown strings manually
-    const parsedData = JSON.parse(responseText.trim());
+    console.log("Getting coordinates from Nominatim...");
 
-    // Validation guard checks to ensure data consistency structure requirements are handled
-    if (!parsedData.recipientName || !parsedData.address || !parsedData.coordinates) {
-      throw new Error('Parsed structural properties mismatch with baseline application entity models.');
-    }
+    const coordinates = await geocodeAddress(
+      parsedData.address.fullAddress,
+      {
+        locality: parsedData.address.locality,
+        city: parsedData.address.city,
+        state: parsedData.address.state,
+        pincode: parsedData.address.pincode,
+      }
+    );
 
-    // Set low confidence trigger threshold constraint
-    parsedData.lowConfidence = (parsedData.ocrConfidence || 100) < 70;
+    parsedData.coordinates = coordinates;
+
+    // Nominatim's usage policy caps free requests at 1/sec. This delay runs
+    // AFTER the geocode call completes, so it throttles the next letter in a
+    // batch rather than slowing this one down. Safe to remove if you switch
+    // to a provider without this limit (e.g. LocationIQ, Mapbox).
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+
+    parsedData.lowConfidence = false;
+
+    parsedData.ocrConfidence = 100;
 
     return parsedData;
+  } catch (err) {
+  console.error("========== OCR FAILURE ==========");
+  console.error(err);
 
-  } catch (error) {
-    console.error('Error during live Gemini API processing loop execution:', error.message);
-    console.log('Defaulting execution thread safely to local address fallback array parsing maps.');
-    return getFallbackAddress();
+  throw err;
   }
 };
 

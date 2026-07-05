@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../widgets/common_widgets.dart';
 import '../../state/app_state.dart';
@@ -25,6 +25,7 @@ class _OfficeDashboardScreenState extends State<OfficeDashboardScreen> {
   bool _isProcessingSingle = false;
   double _ocrConfidence = 91.2;
   bool _lowConfidence = false;
+  Letter? _currentReviewLetter; // Tracks the real, just-uploaded letter awaiting review
   // 🔥 Today's letters list dropdown track cheyadaniki kotha variables
   bool _isTodayBatchDropdownOpen = false;
   String? _selectedActiveBeatForBatch;
@@ -33,7 +34,7 @@ class _OfficeDashboardScreenState extends State<OfficeDashboardScreen> {
   final _ocrOutputController = TextEditingController(text: 'K. R. Rao\\nH.No. 3-4-12, Begumpet Main Rd\\nHyd - 500016');
   final _aiCorrectedController = TextEditingController(text: 'H.No. 3-4-12, Meera Nilayam, Begumpet Main Road, Hyderabad, Telangana, 500016');
 
-  final ImagePicker _picker = ImagePicker();
+  // (file selection now handled inline via FilePicker in _pickLabelImage)
   final MapController _mapController = MapController();
   String? _selectedBeat;
 
@@ -56,59 +57,113 @@ class _OfficeDashboardScreenState extends State<OfficeDashboardScreen> {
     return beatId.toString();
   }
 
-  void _runLivePipeline() async {
+  void _runLivePipeline(List<int> bytes, String filename) async {
     setState(() {
       _isProcessingSingle = true;
       _activePipelineStep = 0;
     });
 
-    for (int i = 1; i <= 5; i++) {
-      await Future.delayed(const Duration(milliseconds: 500));
+    // Animate through the early steps while the real upload request is in
+    // flight, so the checklist still feels responsive during the network call.
+    for (int i = 1; i <= 3; i++) {
+      await Future.delayed(const Duration(milliseconds: 400));
       if (!mounted) return;
       setState(() {
         _activePipelineStep = i;
       });
     }
 
+    final bool success = await widget.state.triggerOcrUploadBytes(bytes, filename);
+
+    if (!mounted) return;
+
+    if (!success) {
+      setState(() {
+        _isProcessingSingle = false;
+        _activePipelineStep = -1;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('OCR upload failed. Please check your connection and try again.')),
+      );
+      return;
+    }
+
+    // The backend sorts letters by most recent first (see GET /api/letters),
+    // so the just-uploaded letter is the first item after the state refresh.
+    final Letter? newest = widget.state.letters.isNotEmpty ? widget.state.letters.first : null;
+
     setState(() {
       _isProcessingSingle = false;
+      _activePipelineStep = 5;
+      _currentReviewLetter = newest;
+      if (newest != null) {
+        _recipientController.text = newest.recipientName ?? '';
+        _ocrOutputController.text = newest.ocrText ?? '';
+        _aiCorrectedController.text = newest.address?['fullAddress'] ?? '';
+        _ocrConfidence = newest.ocrConfidence ?? 100.0;
+        _lowConfidence = newest.lowConfidence ?? false;
+      }
     });
   }
 
   void _pickLabelImage() async {
     try {
-      final XFile? photo = await _picker.pickImage(source: ImageSource.gallery);
-      if (photo != null) {
-        _runLivePipeline();
+      final FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (file.bytes != null) {
+          _runLivePipeline(file.bytes!, file.name);
+        }
       }
     } catch (e) {
-      debugPrint("Error picking image: " + e.toString() + ". Running mock pipeline.");
-      _runLivePipeline();
+      debugPrint("Error picking image: " + e.toString());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not read image: $e')),
+      );
     }
   }
 
-  void _saveVerifiedLetter() {
-    widget.state.addLetter({
-      '_id': 'L' + DateNow(),
-      'trackingId': 'IN-' + DateNow().substring(8),
-      'recipientName': _recipientController.text,
-      'address': {
-        'pincode': '500016',
-        'fullAddress': _aiCorrectedController.text,
-      },
-      'coordinates': {'lat': 17.4455, 'lng': 78.4720},
-      'status': 'assigned',
-      'beatId': {'beatNumber': 'Beat 101', 'colorHex': '#C1272D'},
-      'ocrConfidence': _ocrConfidence,
-      'lowConfidence': _lowConfidence,
+  void _saveVerifiedLetter() async {
+    if (_currentReviewLetter == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No uploaded letter to save. Please scan a label first.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isProcessingSingle = true;
+    });
+
+    final bool success = await widget.state.correctLetterDetails(
+      _currentReviewLetter!.id,
+      _recipientController.text,
+      _aiCorrectedController.text,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _isProcessingSingle = false;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Verified letter added to dispatch queue.')),
+      SnackBar(
+        content: Text(success
+            ? 'Verified letter saved to database.'
+            : 'Failed to save. Please check your connection and try again.'),
+      ),
     );
-    setState(() {
-      _activePipelineStep = -1;
-    });
+
+    if (success) {
+      setState(() {
+        _activePipelineStep = -1;
+        _currentReviewLetter = null;
+      });
+    }
   }
 
   String DateNow() {
@@ -124,9 +179,13 @@ class _OfficeDashboardScreenState extends State<OfficeDashboardScreen> {
     double maxLng = -180.0;
 
     for (var l in widget.state.letters) {
-      final coords = l.coordinates ?? {'lat': 17.44, 'lng': 78.47};
-      final double lat = coords['lat'];
-      final double lng = coords['lng'];
+      final rawCoords = l.coordinates;
+      final double lat = (rawCoords != null && rawCoords['lat'] != null)
+          ? (rawCoords['lat'] as num).toDouble()
+          : 17.44;
+      final double lng = (rawCoords != null && rawCoords['lng'] != null)
+          ? (rawCoords['lng'] as num).toDouble()
+          : 78.47;
       if (lat < minLat) minLat = lat;
       if (lat > maxLat) maxLat = lat;
       if (lng < minLng) minLng = lng;
@@ -154,9 +213,13 @@ class _OfficeDashboardScreenState extends State<OfficeDashboardScreen> {
     double maxLng = -180.0;
 
     for (var l in beatLetters) {
-      final coords = l.coordinates ?? {'lat': 17.44, 'lng': 78.47};
-      final double lat = coords['lat'];
-      final double lng = coords['lng'];
+      final rawCoords = l.coordinates;
+      final double lat = (rawCoords != null && rawCoords['lat'] != null)
+          ? (rawCoords['lat'] as num).toDouble()
+          : 17.44;
+      final double lng = (rawCoords != null && rawCoords['lng'] != null)
+          ? (rawCoords['lng'] as num).toDouble()
+          : 78.47;
       if (lat < minLat) minLat = lat;
       if (lat > maxLat) maxLat = lat;
       if (lng < minLng) minLng = lng;
@@ -306,8 +369,17 @@ class _OfficeDashboardScreenState extends State<OfficeDashboardScreen> {
 
   List<Marker> _buildBeatMarkers() {
     return widget.state.letters.map((l) {
-      final coords = l.coordinates ?? {'lat': 17.44, 'lng': 78.47};
-      
+      final rawCoords = l.coordinates;
+      // Guard against two cases: coordinates missing entirely, OR present but
+      // containing null lat/lng (this happens when geocoding fails on the
+      // backend). Falls back to a default map point in either case.
+      final double lat = (rawCoords != null && rawCoords['lat'] != null)
+          ? (rawCoords['lat'] as num).toDouble()
+          : 17.44;
+      final double lng = (rawCoords != null && rawCoords['lng'] != null)
+          ? (rawCoords['lng'] as num).toDouble()
+          : 78.47;
+
       String colorHex = '#C1272D';
       final dynamic beatData = l.beatId; 
       if (beatData is Map) {
@@ -322,7 +394,7 @@ class _OfficeDashboardScreenState extends State<OfficeDashboardScreen> {
       }
 
       return Marker(
-        point: LatLng(coords['lat'], coords['lng']),
+        point: LatLng(lat, lng),
         width: 40,
         height: 40,
         child: GestureDetector(
@@ -411,7 +483,7 @@ class _OfficeDashboardScreenState extends State<OfficeDashboardScreen> {
                               const SizedBox(width: 8),
                               Expanded(
                                 child: ElevatedButton.icon(
-                                  onPressed: _runLivePipeline,
+                                  onPressed: _pickLabelImage,
                                   icon: const Icon(Icons.document_scanner, size: 16),
                                   label: Text(t(context, 'ocr_scan'), style: const TextStyle(fontSize: 11)),
                                   style: ElevatedButton.styleFrom(
@@ -621,9 +693,16 @@ class _OfficeDashboardScreenState extends State<OfficeDashboardScreen> {
                     Builder(
                       builder: (context) {
                         // Filter the list of letters matching the selected beat sector zone
-                        final targetLetters = widget.state.letters.where((l) => 
-                          _safeGetBeatNumber(l.beatId) == _selectedActiveBeatForBatch
-                        ).toList();
+                        final now = DateTime.now();
+                        final targetLetters = widget.state.letters.where((l) {
+                          final created = l.createdAt;
+
+                          return created != null &&
+                              created.year == now.year &&
+                              created.month == now.month &&
+                              created.day == now.day &&
+                              _safeGetBeatNumber(l.beatId) == _selectedActiveBeatForBatch;
+                        }).toList();
 
                         return Card(
                           key: _dropdownCardKey, // ✅ FIX: Added the exact dropdown card tracking anchor target key

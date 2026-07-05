@@ -57,7 +57,9 @@ class AppState extends ChangeNotifier {
     // 🔥 NEW: Patha DB data ni clean chesi fresh records populating constructor trigger
     initializeFreshMockDatabase();
     
-    _startConnectivityPinger();
+    if (isAuthenticated) {
+  _startConnectivityPinger();
+  }
     _startGpsTracking();
   }
 
@@ -103,25 +105,28 @@ class AppState extends ChangeNotifier {
 
   void _startConnectivityPinger() {
     Future.doWhile(() async {
-      await Future.delayed(const Duration(seconds: 6));
+      await Future.delayed(const Duration(seconds: 30));
       await _checkConnectivity();
       return true;
     });
   }
 
   Future<void> _checkConnectivity() async {
-    try {
-      final res = await _apiServices.fetchLetters(token);
-      if (res.statusCode == 200 && isOffline) {
-        toggleOffline(false);
-      }
-    } catch (e) {
-      if (!isOffline) {
-        isOffline = true;
-        notifyListeners();
-      }
+  if (token.trim().isEmpty) return;
+
+  try {
+    final res = await _apiServices.fetchLetters(token);
+
+    if (res.statusCode == 200 && isOffline) {
+      toggleOffline(false);
+    }
+  } catch (e) {
+    if (!isOffline) {
+      isOffline = true;
+      notifyListeners();
     }
   }
+}
 
   Future<void> _startGpsTracking() async {
     final hasPermission = await _mapServices.verifyAndRequestLocationPermissions();
@@ -134,6 +139,19 @@ class AppState extends ChangeNotifier {
     });
   }
 
+  // Safely extracts lat/lng from a letter's coordinates map, handling both
+  // a missing map and a map that exists but has null lat/lng inside it
+  // (this happens when backend geocoding fails on an address).
+  Map<String, double> _safeCoords(Map<String, dynamic>? rawCoords) {
+    final double lat = (rawCoords != null && rawCoords['lat'] != null)
+        ? (rawCoords['lat'] as num).toDouble()
+        : 17.44;
+    final double lng = (rawCoords != null && rawCoords['lng'] != null)
+        ? (rawCoords['lng'] as num).toDouble()
+        : 78.47;
+    return {'lat': lat, 'lng': lng};
+  }
+
   void _recalculateRemainingDistancesAndEta() {
     double totalDist = 0.0;
     double prevLat = currentLocation['lat'];
@@ -142,10 +160,10 @@ class AppState extends ChangeNotifier {
     final activeStops = letters.where((l) => l.status != 'delivered' && l.status != 'returned_to_office').toList();
 
     for (var stop in activeStops) {
-      final coords = stop.coordinates ?? {'lat': 17.44, 'lng': 78.47};
-      totalDist += _mapServices.computeDistance(prevLat, prevLng, coords['lat'], coords['lng']) * 111.0;
-      prevLat = coords['lat'];
-      prevLng = coords['lng'];
+      final coords = _safeCoords(stop.coordinates);
+      totalDist += _mapServices.computeDistance(prevLat, prevLng, coords['lat']!, coords['lng']!) * 111.0;
+      prevLat = coords['lat']!;
+      prevLng = coords['lng']!;
     }
 
     remainingDistance = totalDist;
@@ -161,7 +179,7 @@ class AppState extends ChangeNotifier {
         token = response.data['token'];
         currentUser = User.fromJson(response.data['user']);
         currentRole = currentUser?.role ?? 'postman';
-        isAuthenticated = true;
+        _startConnectivityPinger();
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('jwt_token', token);
@@ -262,12 +280,12 @@ class AppState extends ChangeNotifier {
 
     while (pending.isNotEmpty) {
       int closestIdx = 0;
-      final firstCoords = pending[0].coordinates ?? {'lat': 17.44, 'lng': 78.47};
-      double minDist = _mapServices.computeDistance(currLat, currLng, firstCoords['lat'], firstCoords['lng']);
+      final firstCoords = _safeCoords(pending[0].coordinates);
+      double minDist = _mapServices.computeDistance(currLat, currLng, firstCoords['lat']!, firstCoords['lng']!);
 
       for (int i = 1; i < pending.length; i++) {
-        final loopCoords = pending[i].coordinates ?? {'lat': 17.44, 'lng': 78.47};
-        final d = _mapServices.computeDistance(currLat, currLng, loopCoords['lat'], loopCoords['lng']);
+        final loopCoords = _safeCoords(pending[i].coordinates);
+        final d = _mapServices.computeDistance(currLat, currLng, loopCoords['lat']!, loopCoords['lng']!);
         if (d < minDist) {
           minDist = d;
           closestIdx = i;
@@ -276,9 +294,9 @@ class AppState extends ChangeNotifier {
 
       final closest = pending.removeAt(closestIdx);
       sortedPending.add(closest);
-      final closestCoords = closest.coordinates ?? {'lat': 17.44, 'lng': 78.47};
-      currLat = closestCoords['lat'];
-      currLng = closestCoords['lng'];
+      final closestCoords = _safeCoords(closest.coordinates);
+      currLat = closestCoords['lat']!;
+      currLng = closestCoords['lng']!;
     }
 
     letters = [...completed, ...sortedPending];
@@ -429,41 +447,38 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 🔥 FIX: OCR scan pipeline error execution payload fix to stop runtime failures
-  Future<void> triggerOcrUpload(String imagePath) async {
+  // Real upload to the backend OCR pipeline. Returns true on success so the
+  // calling screen can show accurate feedback instead of assuming success.
+  Future<bool> triggerOcrUpload(String imagePath) async {
     try {
-      // 1. Trigger network payload safely
       final response = await _apiServices.executeOcrUpload(token, imagePath);
-      if (response.data['success']) {
-        _fetchDashboardData();
-        return;
+      if (response.data['success'] == true) {
+        await _fetchDashboardData();
+        return true;
       }
+      debugPrint("OCR upload responded without success flag: ${response.data}");
+      return false;
     } catch (e) {
-      debugPrint("OCR Online upload failure context fallback handler running: $e");
+      debugPrint("OCR upload failed: $e");
+      return false;
     }
+  }
 
-    // 2. Safe Local Client Pipeline Fallback Parser to simulate clean OCR text outputs without failing
-    await Future.delayed(const Duration(milliseconds: 1200));
-    final mockScannedOcrMap = {
-      'id': 'L-' + DateTime.now().millisecondsSinceEpoch.toString(),
-      'trackingId': 'IN-' + (100000 + letters.length).toString(),
-      'recipientName': 'P. Satish Kumar',
-      'address': {
-        'pincode': '500016',
-        'fullAddress': 'H.No. 12-5-67/A, Green Avenue Lane, Begumpet Area, Hyderabad, Telangana, 500016',
-      },
-      'coordinates': {'lat': 17.4460, 'lng': 78.4735},
-      'status': 'pending',
-      'beatId': {'beatNumber': 'Beat 101', 'colorHex': '#C1272D', 'region': 'Begumpet'},
-      'ocrConfidence': 93.4,
-      'lowConfidence': false,
-      'ocrText': 'TO: P. Satish Kumar\\nH.No. 12-5-67/A, Green Avenue'
-    };
-
-    letters.add(Letter.fromJson(mockScannedOcrMap));
-    adminAnalytics['totalLetters'] = (adminAnalytics['totalLetters'] ?? 0) + 1;
-    _recalculateRemainingDistancesAndEta();
-    notifyListeners();
+  // Bytes-based variant for Flutter web, where picked files don't have a
+  // real filesystem path. Use this from any web-targeted screen.
+  Future<bool> triggerOcrUploadBytes(List<int> bytes, String filename) async {
+    try {
+      final response = await _apiServices.executeOcrUploadBytes(token, bytes, filename);
+      if (response.data['success'] == true) {
+        await _fetchDashboardData();
+        return true;
+      }
+      debugPrint("OCR upload responded without success flag: ${response.data}");
+      return false;
+    } catch (e) {
+      debugPrint("OCR upload failed: $e");
+      return false;
+    }
   }
 
   // 🔥 FIX: Added optional named arguments signature mapping for beatNumber and region registration bounds
@@ -501,7 +516,7 @@ class AppState extends ChangeNotifier {
     try {
       final response = await _apiServices.updateLetterDetails(token, id, {
         'recipientName': correctedName,
-        'address': correctedAddress,
+        'address': {'fullAddress': correctedAddress},
         'lowConfidence': false,
       });
 

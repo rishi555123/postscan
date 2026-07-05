@@ -627,20 +627,39 @@ router.put('/:id', protect, authorize('office_staff', 'admin'), async (req, res)
     if (lowConfidence !== undefined) letter.lowConfidence = lowConfidence;
 
     // Handle incoming beat definitions flexibly (resolves names like 'Beat 101' or ObjectIds)
-    if (beatId) {
-      let matchedBeat;
-      if (typeof beatId === 'string' && beatId.startsWith('Beat')) {
-        matchedBeat = await Beat.findOne({ beatNumber: new RegExp(beatId, 'i') });
-      } else {
-        matchedBeat = await Beat.findById(beatId);
-      }
+    // If frontend selected a beat manually
+if (beatId) {
+    let matchedBeat;
 
-      if (matchedBeat) {
+    if (typeof beatId === "string" && beatId.startsWith("Beat")) {
+        matchedBeat = await Beat.findOne({
+            beatNumber: new RegExp(beatId, "i")
+        });
+    } else {
+        matchedBeat = await Beat.findById(beatId);
+    }
+
+    if (matchedBeat) {
         letter.beatId = matchedBeat._id;
         letter.assignedPostmanId = matchedBeat.assignedPostmanId;
-        letter.status = 'assigned';
-      }
+        letter.status = "assigned";
     }
+}
+// Otherwise auto assign based on corrected address
+else if (address) {
+
+    const parsedAddress = {
+        address
+    };
+
+    const matchedBeat = await autoAssignBeat(parsedAddress);
+
+    if (matchedBeat) {
+        letter.beatId = matchedBeat._id;
+        letter.assignedPostmanId = matchedBeat.assignedPostmanId;
+        letter.status = "assigned";
+    }
+}
 
     await letter.save();
 

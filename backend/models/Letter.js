@@ -38,15 +38,15 @@ const LetterSchema = new mongoose.Schema({
     apartment: { type: String, trim: true },
     street: { type: String, trim: true },
     locality: { type: String, trim: true },
-    city: { type: String, required: true, trim: true },
+    city: { type: String, required: false, trim: true, default: '' },
     district: { type: String, trim: true },
-    state: { type: String, required: true, trim: true },
-    pincode: { type: String, required: true, trim: true },
+    state: { type: String, required: false, trim: true, default: '' },
+    pincode: { type: String, required: false, trim: true, default: '' },
     fullAddress: { type: String, required: true, trim: true }
   },
   coordinates: {
-    lat: { type: Number, required: true },
-    lng: { type: Number, required: true }
+    lat: { type: Number, required: false, default: null },
+    lng: { type: Number, required: false, default: null }
   },
   status: {
     type: String,

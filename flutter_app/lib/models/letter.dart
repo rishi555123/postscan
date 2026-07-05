@@ -9,6 +9,7 @@ class Letter {
   final double? ocrConfidence;
   final bool? lowConfidence;
   final String? ocrText;
+  final DateTime? createdAt;
   final bool? cachedLocal;
 
   Letter({
@@ -22,6 +23,7 @@ class Letter {
     this.ocrConfidence,
     this.lowConfidence,
     this.ocrText,
+    this.createdAt,
     this.cachedLocal,
   });
 
@@ -37,6 +39,9 @@ class Letter {
       ocrConfidence: (json['ocrConfidence'] as num?)?.toDouble(),
       lowConfidence: json['lowConfidence'],
       ocrText: json['ocrText'],
+      createdAt: json['createdAt'] != null
+    ? DateTime.parse(json['createdAt'])
+    : null,
       cachedLocal: json['cachedLocal'],
     );
   }
@@ -54,6 +59,7 @@ class Letter {
       'ocrConfidence': ocrConfidence,
       'lowConfidence': lowConfidence,
       'ocrText': ocrText,
+      'createdAt': createdAt?.toIso8601String(),
       'cachedLocal': cachedLocal,
     };
   }

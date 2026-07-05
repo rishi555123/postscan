@@ -34,6 +34,9 @@ const fetchWeather = async (lat, lng, pincode = '500016') => {
   if (!apiKey) {
     console.log(`OpenWeather API Key missing. Generating mock weather for pincode: ${pincode}`);
     weatherResult = generateMockWeather(lat, lng);
+  } else if (lat == null || lng == null) {
+    console.log(`Coordinates missing (geocoding likely failed) for pincode: ${pincode}. Skipping live weather call.`);
+    weatherResult = generateMockWeather(0, 0);
   } else {
     try {
       console.log(`Fetching live weather from OpenWeather for coords: (${lat}, ${lng})...`);

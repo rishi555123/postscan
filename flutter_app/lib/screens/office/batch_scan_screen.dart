@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-
 import '../../widgets/common_widgets.dart';
 import '../../state/app_state.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:dio/dio.dart';
+import '../../services/api_services.dart';
 
 class BatchScanScreen extends StatefulWidget {
   final AppState state;
@@ -13,52 +15,89 @@ class BatchScanScreen extends StatefulWidget {
 
 class _BatchScanScreenState extends State<BatchScanScreen> {
   bool _uploading = false;
+  final ApiServices _api = ApiServices();
+  List<PlatformFile> _selectedFiles = [];
   List<Map<String, dynamic>> _queue = [];
 
-  void _triggerBatchProcessing() async {
-    setState(() {
-      _uploading = true;
-      _queue = [
-        {'name': 'label_1.png', 'progress': 20, 'status': 'processing', 'recipient': 'K. L. Reddy'},
-        {'name': 'label_2.png', 'progress': 0, 'status': 'pending', 'recipient': 'P. Sen'},
-        {'name': 'label_3.png', 'progress': 0, 'status': 'pending', 'recipient': 'M. A. Khan'},
-      ];
-    });
+  Future<void> _pickImages() async {
+  FilePickerResult? result = await FilePicker.platform.pickFiles(
+    allowMultiple: true,
+    type: FileType.image,
+  );
 
-    for (int i = 0; i < _queue.length; i++) {
-      setState(() {
-        _queue[i]['status'] = 'processing';
-      });
-      for (int progress = 20; progress <= 100; progress += 40) {
-        await Future.delayed(const Duration(milliseconds: 300));
-        setState(() {
-          _queue[i]['progress'] = progress;
-        });
-      }
-      setState(() {
-        _queue[i]['status'] = 'complete';
-      });
+  if (result == null) return;
 
-      widget.state.addLetter({
-        '_id': 'L_BATCH_${DateTime.now().millisecond}_$i',
-        'trackingId': 'IN-BT${DateTime.now().millisecond}$i',
-        'recipientName': _queue[i]['recipient'],
-        'address': {
-          'pincode': '500016',
-          'fullAddress': 'H.No. 402, Ameerpet, Hyderabad, Telangana, 500016',
-        },
-        'coordinates': {'lat': 17.4375, 'lng': 78.4482},
-        'status': 'assigned',
-        'beatId': {'beatNumber': 'Beat 101', 'colorHex': '#C1272D'},
-        'ocrConfidence': 89.0,
-        'lowConfidence': false,
-      });
+  setState(() {
+    _selectedFiles = result.files;
+  });
+}
+
+  Future<void> _triggerBatchProcessing() async {
+  if (_selectedFiles.isEmpty) return;
+
+  setState(() {
+    _uploading = true;
+  });
+
+  try {
+    final formData = FormData();
+
+    for (final file in _selectedFiles) {
+      formData.files.add(
+        MapEntry(
+          'labels',
+          MultipartFile.fromBytes(
+            file.bytes!,
+            filename: file.name,
+          ),
+        ),
+      );
     }
 
-    setState(() {
-      _uploading = false;
-    });
+    final response = await _api.uploadBatchLabels(
+      formData,
+      widget.state.token,
+    );
+
+    debugPrint(response.data.toString());
+
+    if (response.data["success"] == true) {
+  final letters = response.data["letters"] as List;
+
+  setState(() {
+    _queue = letters
+        .map<Map<String, dynamic>>(
+          (e) => {
+            "name": e["trackingId"],
+            "progress": 100,
+            "status": "complete",
+          },
+        )
+        .toList();
+  });
+}
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Batch uploaded successfully"),
+      ),
+    );
+
+  } catch (e) {
+    print(e);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(e.toString()),
+      ),
+    );
   }
+
+  setState(() {
+    _uploading = false;
+    _selectedFiles.clear();
+  });
+}
 
   @override
   Widget build(BuildContext context) {
@@ -86,9 +125,21 @@ class _BatchScanScreenState extends State<BatchScanScreen> {
                           Text(t(context, 'select_photo'), style: const TextStyle(fontWeight: FontWeight.bold)),
                           const SizedBox(height: 16),
                           ElevatedButton(
-                            onPressed: _uploading ? null : _triggerBatchProcessing,
+                            onPressed: _uploading
+    ? null
+    : () async {
+        if (_selectedFiles.isEmpty) {
+          await _pickImages();
+        } else {
+          await _triggerBatchProcessing();
+        }
+      },
                             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFC1272D), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 44)),
-                            child: _uploading ? const CircularProgressIndicator(color: Colors.white) : const Text('Load labels and Process Batch'),
+                            child: _uploading ? const CircularProgressIndicator(color: Colors.white) : Text(
+  _selectedFiles.isEmpty
+      ? 'Select Postal Labels'
+      : '${_selectedFiles.length} Images Selected',
+)
                           )
                         ],
                       ),

@@ -4,12 +4,17 @@ class AuthServices {
   final Dio _dio = Dio();
   final String _apiUrl = "http://localhost:5000/api";
 
-  Options _buildOptions(String token) => Options(
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
+  Options _buildOptions(String token) {
+  final headers = <String, dynamic>{
+    'Content-Type': 'application/json',
+  };
+
+  if (token.trim().isNotEmpty) {
+    headers['Authorization'] = 'Bearer $token';
+  }
+
+  return Options(headers: headers);
+}
 
   Future<Response> executeLogin(String username, String password) {
     return _dio.post(
@@ -48,3 +53,4 @@ class AuthServices {
     );
   }
 }
+
